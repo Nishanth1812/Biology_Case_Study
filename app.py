@@ -274,16 +274,24 @@ with plot_col:
     st.plotly_chart(fragility_figure(results), use_container_width=True)
 
 with table_col:
-    st.subheader("Most Fragile Window")
+    st.subheader("Current Window")
+    window_options = results.index.tolist()
+    selected_window = st.selectbox(
+        "Choose a window to inspect",
+        window_options,
+        index=int(results["Fragility Score"].idxmax()),
+        format_func=lambda i: f'{int(results.loc[i, "Start"])}-{int(results.loc[i, "End"])} | score {results.loc[i, "Fragility Score"]:.4f}',
+    )
+    current_row = results.loc[selected_window]
     st.markdown(
         f'<div class="metric-box">'
-        f'<b>Position:</b> {int(top_row["Start"])}-{int(top_row["End"])}<br>'
-        f'<b>GC Content:</b> {top_row["GC Content (%)"]:.2f}%<br>'
-        f'<b>AT Content:</b> {top_row["AT Content (%)"]:.2f}%<br>'
-        f'<b>Flexibility Score:</b> {top_row["Flexibility Score"]:.4f}<br>'
-        f'<b>Repeat Density:</b> {top_row["Repeat Density"]:.4f}<br>'
-        f'<b>Tm:</b> {int(top_row["Tm"])}<br>'
-        f'<b>Fragility Score:</b> {top_row["Fragility Score"]:.4f}'
+        f'<b>Position:</b> {int(current_row["Start"])}-{int(current_row["End"])}<br>'
+        f'<b>GC Content:</b> {current_row["GC Content (%)"]:.2f}%<br>'
+        f'<b>AT Content:</b> {current_row["AT Content (%)"]:.2f}%<br>'
+        f'<b>Flexibility Score:</b> {current_row["Flexibility Score"]:.4f}<br>'
+        f'<b>Repeat Density:</b> {current_row["Repeat Density"]:.4f}<br>'
+        f'<b>Tm:</b> {int(current_row["Tm"])}<br>'
+        f'<b>Fragility Score:</b> {current_row["Fragility Score"]:.4f}'
         f'</div>',
         unsafe_allow_html=True,
     )
