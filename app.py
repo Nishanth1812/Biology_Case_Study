@@ -56,8 +56,8 @@ def flexibility_score(seq: str) -> float:
     return flexible / pairs if pairs else 0.0
 
 
-def _count_tandem_repeat_bases(seq: str, motif_len: int, min_repeats: int) -> int:
-    total = 0
+def _mark_tandem_repeat_bases(seq: str, motif_len: int, min_repeats: int) -> set[int]:
+    marked = set()
     i = 0
     n = len(seq)
     while i <= n - motif_len * min_repeats:
@@ -68,23 +68,26 @@ def _count_tandem_repeat_bases(seq: str, motif_len: int, min_repeats: int) -> in
             repeats += 1
             j += motif_len
         if repeats >= min_repeats:
-            total += motif_len * repeats
+            marked.update(range(i, j))
             i = j
         else:
             i += 1
-    return total
+    return marked
 
 
 def repeat_density(seq: str) -> float:
     if not seq:
         return 0.0
 
-    homopolymer = sum(len(match.group(0)) for match in re.finditer(r"([ACGT])\1{3,}", seq))
-    dinuc = _count_tandem_repeat_bases(seq, motif_len=2, min_repeats=3)
-    trinuc = _count_tandem_repeat_bases(seq, motif_len=3, min_repeats=3)
+    repeated_positions: set[int] = set()
 
-    repeated_bases = max(homopolymer, 0) + max(dinuc, 0) + max(trinuc, 0)
-    repeated_bases = min(repeated_bases, len(seq))
+    for match in re.finditer(r"([ACGT])\1{3,}", seq):
+        repeated_positions.update(range(match.start(), match.end()))
+
+    repeated_positions |= _mark_tandem_repeat_bases(seq, motif_len=2, min_repeats=3)
+    repeated_positions |= _mark_tandem_repeat_bases(seq, motif_len=3, min_repeats=3)
+
+    repeated_bases = len(repeated_positions)
     return repeated_bases / len(seq)
 
 
