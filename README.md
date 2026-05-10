@@ -5,8 +5,8 @@ Simple computational biology demo for identifying fragile regions in a DNA seque
 ## Run
 
 ```bash
-pip install -r requirements.txt
-streamlit run app.py
+uv sync
+uv run streamlit run app.py
 ```
 
 ## Method
