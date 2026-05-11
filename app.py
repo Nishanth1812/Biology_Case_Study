@@ -159,18 +159,6 @@ def score_color(score: float) -> str:
     return "#2c7fb8"
 
 
-def render_sequence_map(df: pd.DataFrame) -> str:
-    segments = []
-    for _, row in df.iterrows():
-        color = score_color(row["Fragility Score"])
-        label = f'{int(row["Start"])}-{int(row["End"])}'
-        segments.append(
-            f'<span style="display:inline-block;padding:6px 8px;margin:2px 4px 2px 0;'
-            f'border-radius:6px;background:{color};color:white;font-size:12px;line-height:1.2;">{label}</span>'
-        )
-    return "".join(segments)
-
-
 def fragility_figure(df: pd.DataFrame) -> go.Figure:
     fig = go.Figure()
     fig.add_trace(
@@ -204,13 +192,6 @@ st.markdown(
     """
     <style>
     .block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
-    .metric-box {
-        background: #f7f8fa;
-        border: 1px solid #d9dde3;
-        border-radius: 10px;
-        padding: 0.9rem;
-        margin-bottom: 0.5rem;
-    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -223,22 +204,21 @@ left, right = st.columns([1, 1])
 
 with left:
     st.subheader("Input Sequence")
-    mode = st.radio("Choose input source", ["Load sample FASTA", "Paste DNA sequence"], horizontal=True)
-    if mode == "Load sample FASTA":
-        sequence_text = st.text_area("DNA sequence", value=SAMPLE_FASTA, height=220)
-    else:
-        sequence_text = st.text_area(
-            "DNA sequence",
-            value="".join([
-                "ATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATAT",
-                "GCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGC",
-                "CCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCG",
-            ]),
-            height=220,
-            help="Paste a DNA sequence or FASTA text. Non-ACGT characters are ignored.",
-        )
+    if st.button("Load sample sequence", use_container_width=True):
+        st.session_state.sequence_text = SAMPLE_FASTA
+
+    if "sequence_text" not in st.session_state:
+        st.session_state.sequence_text = SAMPLE_FASTA
+
+    sequence_text = st.text_area(
+        "DNA sequence",
+        key="sequence_text",
+        height=220,
+        help="Paste a DNA sequence or FASTA text. Non-ACGT characters are ignored.",
+    )
 
     st.info(f"Window size = {WINDOW_SIZE} bp, step size = {STEP_SIZE} bp")
+    st.caption(f"Sequence length: {len(parse_sequence(sequence_text))} bp")
 
 seq = parse_sequence(sequence_text)
 
@@ -266,59 +246,35 @@ results = analyze_sequence(seq)
 top_row = results.loc[results["Fragility Score"].idxmax()]
 
 st.subheader("Window Summary")
-summary_cols = st.columns(5)
+summary_cols = st.columns(4)
 summary_cols[0].metric("Sequence Length", len(seq))
 summary_cols[1].metric("Windows Analysed", len(results))
 summary_cols[2].metric("Highest Fragility", f'{top_row["Fragility Score"]:.4f}')
 summary_cols[3].metric("Top Window", f'{int(top_row["Start"])}-{int(top_row["End"])}')
-summary_cols[4].metric("Classification", fragility_band(float(top_row["Fragility Score"])))
 
-plot_col, table_col = st.columns([1.1, 0.9])
+plot_col, table_col = st.columns([1.15, 0.85])
 
 with plot_col:
     st.plotly_chart(fragility_figure(results), use_container_width=True)
 
 with table_col:
-    st.subheader("Current Window")
-    window_options = results.index.tolist()
-    selected_window = st.selectbox(
-        "Choose a window to inspect",
-        window_options,
-        index=int(results["Fragility Score"].idxmax()),
-        format_func=lambda i: f'{int(results.loc[i, "Start"])}-{int(results.loc[i, "End"])} | score {results.loc[i, "Fragility Score"]:.4f}',
-    )
-    current_row = results.loc[selected_window]
-    st.caption("Selected window details")
-    detail_cols = st.columns(2)
-    detail_cols[0].metric("Position", f'{int(current_row["Start"])}-{int(current_row["End"])}')
-    detail_cols[1].metric("Fragility Score", f'{current_row["Fragility Score"]:.4f}')
-
+    st.subheader("Top Window Details")
     with st.container(border=True):
-        mini_cols = st.columns(2)
-        mini_cols[0].metric("GC Content", f'{current_row["GC Content (%)"]:.2f}%')
-        mini_cols[1].metric("AT Content", f'{current_row["AT Content (%)"]:.2f}%')
-        mini_cols[0].metric("Flexibility Score", f'{current_row["Flexibility Score"]:.4f}')
-        mini_cols[1].metric("Repeat Density", f'{current_row["Repeat Density"]:.4f}')
-        mini_cols[0].metric("Tm", int(current_row["Tm"]))
-        mini_cols[1].metric("Class", fragility_band(float(current_row["Fragility Score"])))
+        st.metric("Position", f'{int(top_row["Start"])}-{int(top_row["End"])}')
+        c1, c2 = st.columns(2)
+        c1.metric("GC Content", f'{top_row["GC Content (%)"]:.2f}%')
+        c2.metric("AT Content", f'{top_row["AT Content (%)"]:.2f}%')
+        c1.metric("Flexibility Score", f'{top_row["Flexibility Score"]:.4f}')
+        c2.metric("Repeat Density", f'{top_row["Repeat Density"]:.4f}')
+        c1.metric("Tm", int(top_row["Tm"]))
+        c2.metric("Fragility Score", f'{top_row["Fragility Score"]:.4f}')
 
     st.dataframe(
         results[["Start", "End", "GC Content (%)", "AT Content (%)", "Flexibility Score", "Repeat Density", "Tm", "Fragility Score"]]
         .sort_values("Fragility Score", ascending=False)
-        .head(8),
+        .head(5),
         use_container_width=True,
         hide_index=True,
     )
 
-st.subheader("Fragile Window Map")
-st.markdown(
-    "<div style='padding:0.5rem 0 1rem 0; line-height: 1.8;'>" + render_sequence_map(results) + "</div>",
-    unsafe_allow_html=True,
-)
-
-st.subheader("All Window Scores")
-display_df = results.copy()
-display_df["Fragility Class"] = display_df["Fragility Score"].map(fragility_band)
-st.dataframe(display_df, use_container_width=True, hide_index=True)
-
-st.caption("High-risk windows are shown in red, moderate in orange, and lower-scoring windows in blue.")
+st.caption("Red markers indicate the most fragile windows. Orange is moderate, blue is lower.")
