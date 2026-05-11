@@ -14,7 +14,8 @@ SAMPLE_FASTA = ">Fragile region demo sample\n" \
     "ATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATAT\n" \
     "GCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGC\n" \
     "CCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCG\n" \
-    "ATGCGTATATATGCGTCCGCCGATATATATATCCGCGGCGGATATATATATATATATATATATATAT"
+    "ATGCGTATATATGCGTCCGCCGATATATATATCCGCGGCGGATATATATATATATATATATATATAT\n" \
+    "ATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATAT"
 
 
 @dataclass
@@ -222,13 +223,17 @@ left, right = st.columns([1, 1])
 
 with left:
     st.subheader("Input Sequence")
-    mode = st.radio("Choose input source", ["Paste DNA sequence", "Load sample FASTA"], horizontal=True)
+    mode = st.radio("Choose input source", ["Load sample FASTA", "Paste DNA sequence"], horizontal=True)
     if mode == "Load sample FASTA":
         sequence_text = st.text_area("DNA sequence", value=SAMPLE_FASTA, height=220)
     else:
         sequence_text = st.text_area(
             "DNA sequence",
-            value="ATATATATATGCGCGCGCATATATATATATCCGCCGCCGATATATATATATATGCGTATATATATAT",
+            value="".join([
+                "ATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATAT",
+                "GCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGC",
+                "CCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCG",
+            ]),
             height=220,
             help="Paste a DNA sequence or FASTA text. Non-ACGT characters are ignored.",
         )
