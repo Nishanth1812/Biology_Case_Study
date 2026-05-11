@@ -1,0 +1,13 @@
+[project]
+name = "biology-case-study"
+version = "0.1.0"
+description = "Computational biology demo for identifying fragile regions in DNA"
+requires-python = ">=3.12"
+dependencies = [
+  "streamlit>=1.36",
+  "pandas>=2.0",
+  "plotly>=5.20",
+]
+
+[tool.uv]
+dev-dependencies = []
