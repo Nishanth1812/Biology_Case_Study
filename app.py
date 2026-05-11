@@ -153,10 +153,36 @@ def fragility_band(score: float) -> str:
 
 def score_color(score: float) -> str:
     if score >= 0.7:
-        return "#c0392b"
+        return "#dc2626"
     if score >= 0.45:
-        return "#e67e22"
-    return "#2c7fb8"
+        return "#f59e0b"
+    return "#10b981"
+
+
+def render_sequence_map(df: pd.DataFrame) -> str:
+    segments = []
+    for _, row in df.iterrows():
+        color = score_color(row["Fragility Score"])
+        label = f'{int(row["Start"])}-{int(row["End"])}'
+        segments.append(
+            f'<span style="display:inline-block;padding:6px 8px;margin:2px 4px 2px 0;'
+            f'border-radius:6px;background:{color};color:white;font-size:12px;line-height:1.2;">{label}</span>'
+        )
+    return "".join(segments)
+
+
+def render_color_legend() -> str:
+    items = [
+        ("#dc2626", "High fragility"),
+        ("#f59e0b", "Moderate fragility"),
+        ("#10b981", "Low fragility"),
+    ]
+    return "".join(
+        f'<span style="display:inline-flex;align-items:center;margin-right:14px;">'
+        f'<span style="width:12px;height:12px;border-radius:3px;background:{color};display:inline-block;margin-right:6px;"></span>'
+        f'{label}</span>'
+        for color, label in items
+    )
 
 
 def fragility_figure(df: pd.DataFrame) -> go.Figure:
@@ -246,35 +272,60 @@ results = analyze_sequence(seq)
 top_row = results.loc[results["Fragility Score"].idxmax()]
 
 st.subheader("Window Summary")
-summary_cols = st.columns(4)
+summary_cols = st.columns(5)
 summary_cols[0].metric("Sequence Length", len(seq))
 summary_cols[1].metric("Windows Analysed", len(results))
 summary_cols[2].metric("Highest Fragility", f'{top_row["Fragility Score"]:.4f}')
 summary_cols[3].metric("Top Window", f'{int(top_row["Start"])}-{int(top_row["End"])}')
+summary_cols[4].metric("Classification", fragility_band(float(top_row["Fragility Score"])))
 
-plot_col, table_col = st.columns([1.15, 0.85])
+plot_col, table_col = st.columns([1.1, 0.9])
 
 with plot_col:
     st.plotly_chart(fragility_figure(results), use_container_width=True)
 
 with table_col:
-    st.subheader("Top Window Details")
+    st.subheader("Current Window")
+    selected_window = st.selectbox(
+        "Choose a window to inspect",
+        results.index.tolist(),
+        index=int(results["Fragility Score"].idxmax()),
+        format_func=lambda i: f'{int(results.loc[i, "Start"])}-{int(results.loc[i, "End"])} | score {results.loc[i, "Fragility Score"]:.4f}',
+    )
+    current_row = results.loc[selected_window]
+
     with st.container(border=True):
-        st.metric("Position", f'{int(top_row["Start"])}-{int(top_row["End"])}')
-        c1, c2 = st.columns(2)
-        c1.metric("GC Content", f'{top_row["GC Content (%)"]:.2f}%')
-        c2.metric("AT Content", f'{top_row["AT Content (%)"]:.2f}%')
-        c1.metric("Flexibility Score", f'{top_row["Flexibility Score"]:.4f}')
-        c2.metric("Repeat Density", f'{top_row["Repeat Density"]:.4f}')
-        c1.metric("Tm", int(top_row["Tm"]))
-        c2.metric("Fragility Score", f'{top_row["Fragility Score"]:.4f}')
+        st.markdown(f'**Position:** {int(current_row["Start"])}-{int(current_row["End"])}')
+        c1, c2, c3 = st.columns(3)
+        c1.metric("GC Content", f'{current_row["GC Content (%)"]:.2f}%')
+        c2.metric("AT Content", f'{current_row["AT Content (%)"]:.2f}%')
+        c3.metric("Flexibility Score", f'{current_row["Flexibility Score"]:.4f}')
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Repeat Density", f'{current_row["Repeat Density"]:.4f}')
+        c2.metric("Tm", int(current_row["Tm"]))
+        c3.metric("Fragility Score", f'{current_row["Fragility Score"]:.4f}')
 
     st.dataframe(
         results[["Start", "End", "GC Content (%)", "AT Content (%)", "Flexibility Score", "Repeat Density", "Tm", "Fragility Score"]]
         .sort_values("Fragility Score", ascending=False)
-        .head(5),
+        .head(8),
         use_container_width=True,
         hide_index=True,
     )
 
-st.caption("Red markers indicate the most fragile windows. Orange is moderate, blue is lower.")
+st.subheader("Fragile Window Map")
+st.markdown(
+    "<div style='padding:0.25rem 0 0.5rem 0; line-height: 1.8;'>" + render_color_legend() + "</div>",
+    unsafe_allow_html=True,
+)
+st.markdown(
+    "<div style='padding:0 0 1rem 0; line-height: 1.8;'>" + render_sequence_map(results) + "</div>",
+    unsafe_allow_html=True,
+)
+
+st.subheader("All Window Scores")
+display_df = results.copy()
+display_df["Fragility Class"] = display_df["Fragility Score"].map(fragility_band)
+st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+st.caption("Red = high fragility, orange = moderate fragility, blue = low fragility.")
