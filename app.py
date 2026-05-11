@@ -283,18 +283,20 @@ with table_col:
         format_func=lambda i: f'{int(results.loc[i, "Start"])}-{int(results.loc[i, "End"])} | score {results.loc[i, "Fragility Score"]:.4f}',
     )
     current_row = results.loc[selected_window]
-    st.markdown(
-        f'<div class="metric-box">'
-        f'<b>Position:</b> {int(current_row["Start"])}-{int(current_row["End"])}<br>'
-        f'<b>GC Content:</b> {current_row["GC Content (%)"]:.2f}%<br>'
-        f'<b>AT Content:</b> {current_row["AT Content (%)"]:.2f}%<br>'
-        f'<b>Flexibility Score:</b> {current_row["Flexibility Score"]:.4f}<br>'
-        f'<b>Repeat Density:</b> {current_row["Repeat Density"]:.4f}<br>'
-        f'<b>Tm:</b> {int(current_row["Tm"])}<br>'
-        f'<b>Fragility Score:</b> {current_row["Fragility Score"]:.4f}'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
+    st.caption("Selected window details")
+    detail_cols = st.columns(2)
+    detail_cols[0].metric("Position", f'{int(current_row["Start"])}-{int(current_row["End"])}')
+    detail_cols[1].metric("Fragility Score", f'{current_row["Fragility Score"]:.4f}')
+
+    with st.container(border=True):
+        mini_cols = st.columns(2)
+        mini_cols[0].metric("GC Content", f'{current_row["GC Content (%)"]:.2f}%')
+        mini_cols[1].metric("AT Content", f'{current_row["AT Content (%)"]:.2f}%')
+        mini_cols[0].metric("Flexibility Score", f'{current_row["Flexibility Score"]:.4f}')
+        mini_cols[1].metric("Repeat Density", f'{current_row["Repeat Density"]:.4f}')
+        mini_cols[0].metric("Tm", int(current_row["Tm"]))
+        mini_cols[1].metric("Class", fragility_band(float(current_row["Fragility Score"])))
+
     st.dataframe(
         results[["Start", "End", "GC Content (%)", "AT Content (%)", "Flexibility Score", "Repeat Density", "Tm", "Fragility Score"]]
         .sort_values("Fragility Score", ascending=False)
