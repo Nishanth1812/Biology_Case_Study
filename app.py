@@ -106,7 +106,7 @@ def analyze_window(seq: str, start: int, window_size: int) -> WindowResult:
     flex = flexibility_score(window)
     repeat = repeat_density(window)
     tm = melting_temperature(window)
-    fragility = (0.30 * (at / 100.0)) + (0.35 * flex) + (0.35 * repeat)
+    fragility = (0.30 * (at / 100.0)) + (0.35 * flex) + (0.35 * repeat) + 0.15 * (1 - (tm / 400))
     return WindowResult(
         start=start + 1,
         end=start + len(window),
@@ -217,7 +217,8 @@ st.set_page_config(page_title="Fragile Region Demo", layout="wide")
 st.markdown(
     """
     <style>
-    .block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
+    .block-container { padding-top: 1rem; padding-bottom: 1.5rem; max-width: 1400px; margin: 0 auto; }
+    .stMetric { margin: 0.5rem 0; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -230,21 +231,31 @@ left, right = st.columns([1, 1])
 
 with left:
     st.subheader("Input Sequence")
-    if st.button("Load sample sequence", use_container_width=True):
-        st.session_state.sequence_text = SAMPLE_FASTA
+    
+    btn_col1, btn_col2 = st.columns([1, 1], gap="small")
+    with btn_col1:
+        if st.button("📋 Load Sample", use_container_width=True, key="load_btn"):
+            st.session_state.sequence_text = SAMPLE_FASTA
+            st.rerun()
+    
+    with btn_col2:
+        uploaded_file = st.file_uploader("📁 Upload FASTA", type=["fasta", "fna", "txt"], key="file_upload")
+        if uploaded_file is not None:
+            file_content = uploaded_file.read().decode("utf-8")
+            st.session_state.sequence_text = file_content
+            st.rerun()
 
     if "sequence_text" not in st.session_state:
         st.session_state.sequence_text = SAMPLE_FASTA
 
     sequence_text = st.text_area(
-        "DNA sequence",
+        "Paste or edit sequence below:",
         key="sequence_text",
-        height=220,
+        height=200,
         help="Paste a DNA sequence or FASTA text. Non-ACGT characters are ignored.",
     )
 
-    st.info(f"Window size = {WINDOW_SIZE} bp, step size = {STEP_SIZE} bp")
-    st.caption(f"Sequence length: {len(parse_sequence(sequence_text))} bp")
+    st.info(f"⚙️ Window: {WINDOW_SIZE} bp | Step: {STEP_SIZE} bp | Length: {len(parse_sequence(sequence_text))} bp")
 
 seq = parse_sequence(sequence_text)
 
@@ -268,6 +279,10 @@ if len(seq) < WINDOW_SIZE:
     st.stop()
 
 results = analyze_sequence(seq)
+
+if results.empty:
+    st.warning("No windows could be analyzed. Sequence may be too short.")
+    st.stop()
 
 top_row = results.loc[results["Fragility Score"].idxmax()]
 
