@@ -10,14 +10,6 @@ WINDOW_SIZE = 100
 STEP_SIZE = 20
 
 
-SAMPLE_FASTA = ">Fragile region demo sample\n" \
-    "ATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATAT\n" \
-    "GCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGCGC\n" \
-    "CCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCGCCG\n" \
-    "ATGCGTATATATGCGTCCGCCGATATATATATCCGCGGCGGATATATATATATATATATATATATAT\n" \
-    "ATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATATAT"
-
-
 @dataclass
 class WindowResult:
     start: int
@@ -160,15 +152,38 @@ def score_color(score: float) -> str:
 
 
 def render_sequence_map(df: pd.DataFrame) -> str:
-    segments = []
-    for _, row in df.iterrows():
+    if df.empty:
+        return ""
+
+    count = len(df)
+    label_every = max(1, count // 12)
+    tile_width = 16 if count > 120 else 22
+    tiles = []
+    labels = []
+
+    for idx, row in enumerate(df.iterrows()):
+        _, row = row
         color = score_color(row["Fragility Score"])
-        label = f'{int(row["Start"])}-{int(row["End"])}'
-        segments.append(
-            f'<span style="display:inline-block;padding:6px 8px;margin:2px 4px 2px 0;'
-            f'border-radius:6px;background:{color};color:white;font-size:12px;line-height:1.2;">{label}</span>'
+        start = int(row["Start"])
+        end = int(row["End"])
+        coord = f"{start}-{end}"
+        display_label = str(start) if idx % label_every == 0 or idx == count - 1 else ""
+        tiles.append(
+            f'<div title="{coord}" style="width:{tile_width}px;height:22px;flex:0 0 {tile_width}px;'
+            f'border-radius:6px;background:{color};box-shadow:inset 0 0 0 1px rgba(255,255,255,0.08);"></div>'
         )
-    return "".join(segments)
+        labels.append(
+            f'<div title="{coord}" style="width:{tile_width}px;flex:0 0 {tile_width}px;text-align:center;'
+            f'font-size:10px;line-height:1.1;color:rgba(255,255,255,0.68);min-height:12px;">{display_label}</div>'
+        )
+
+    return (
+        '<div style="overflow-x:auto;padding-bottom:0.1rem;">'
+        f'<div style="display:flex;flex-direction:column;gap:0.35rem;min-width:max-content;">'
+        f'<div style="display:flex;gap:4px;align-items:center;">{"".join(tiles)}</div>'
+        f'<div style="display:flex;gap:4px;align-items:flex-start;">{"".join(labels)}</div>'
+        '</div></div>'
+    )
 
 
 def render_color_legend() -> str:
@@ -186,81 +201,173 @@ def render_color_legend() -> str:
 
 
 def fragility_figure(df: pd.DataFrame) -> go.Figure:
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=df["Start"],
-            y=df["Fragility Score"],
+    starts = df["Start"]
+    scores = df["Fragility Score"]
+    large_sequence = len(df) > 350
+    marker_size = 3.5 if large_sequence else 6.5
+    line_width = 1.4 if large_sequence else 2.2
+
+    fig = go.Figure(
+        go.Scattergl(
+            x=starts,
+            y=scores,
             mode="lines+markers",
-            line=dict(color="#34495e", width=2),
+            line=dict(color="#60a5fa", width=line_width),
             marker=dict(
-                color=[score_color(v) for v in df["Fragility Score"]],
-                size=9,
+                color=[score_color(v) for v in scores],
+                size=marker_size,
+                opacity=0.9,
+                line=dict(color="rgba(255,255,255,0.20)", width=0.4),
             ),
+            hovertemplate="Start %{x}<br>Fragility %{y:.4f}<extra></extra>",
             name="Fragility Score",
         )
     )
+
     fig.update_layout(
-        title="Fragility Score vs. Sequence Position",
-        xaxis_title="Window Start Position",
-        yaxis_title="Fragility Score",
-        template="plotly_white",
-        height=420,
+        title=dict(text="Fragility Score vs. Sequence Position", x=0.02, xanchor="left"),
+        template="plotly_dark",
+        height=470,
         margin=dict(l=30, r=30, t=60, b=30),
-        yaxis=dict(range=[0, max(1.0, df["Fragility Score"].max() + 0.1)]),
+        hovermode="x unified",
+        legend=dict(orientation="h", y=1.02, x=0.01, bgcolor="rgba(0,0,0,0)", title_text=""),
+        paper_bgcolor="#0f1117",
+        plot_bgcolor="#0f1117",
+        font=dict(color="#e5e7eb"),
+    )
+    fig.update_xaxes(
+        title="Window Start Position",
+        tickformat="~s" if len(df) > 100 else None,
+        nticks=8 if large_sequence else 10,
+        gridcolor="rgba(148, 163, 184, 0.16)",
+        zeroline=False,
+        showline=False,
+        showspikes=False,
+    )
+    fig.update_yaxes(
+        title="Fragility Score",
+        range=[0, max(1.0, df["Fragility Score"].max() + 0.1)],
+        gridcolor="rgba(148, 163, 184, 0.16)",
+        zeroline=False,
+        showline=False,
+        showspikes=False,
     )
     return fig
 
 
-st.set_page_config(page_title="Fragile Region Demo", layout="wide")
+st.set_page_config(page_title="Fragile Region Demo", page_icon="🧬", layout="wide")
 
 st.markdown(
     """
     <style>
-    .block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
+    .block-container { padding-top: 1.25rem; padding-bottom: 2rem; max-width: 1280px; }
+    .panel-title {
+        font-size: 1.02rem;
+        font-weight: 650;
+        margin-bottom: 0.35rem;
+        letter-spacing: 0.01em;
+    }
+    .panel-copy {
+        color: rgba(255, 255, 255, 0.70);
+        line-height: 1.5;
+        margin-bottom: 1rem;
+    }
+    .small-note {
+        color: rgba(255, 255, 255, 0.68);
+        font-size: 0.92rem;
+        margin-top: 0.7rem;
+    }
+    .empty-state {
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 16px;
+        padding: 1rem 1.1rem;
+        background: rgba(255, 255, 255, 0.03);
+        margin-top: 1rem;
+    }
+    .empty-state-title {
+        font-size: 1rem;
+        font-weight: 650;
+        margin-bottom: 0.35rem;
+    }
+    .empty-state-copy {
+        color: rgba(255, 255, 255, 0.72);
+        line-height: 1.5;
+    }
+    div[data-testid="stFileUploader"] section {
+        border-radius: 14px;
+    }
+    div[data-testid="stTextArea"] textarea {
+        border-radius: 14px;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 st.title("Identifying Fragile Regions in the Human Genome")
-st.caption("Sliding-window computational biology demo based on sequence properties from the presentation slides.")
+st.caption("Upload or paste a DNA sequence, and the demo will flag windows that look unusually fragile.")
 
-left, right = st.columns([1, 1])
+input_col, info_col = st.columns([1.15, 0.85], gap="large")
 
-with left:
-    st.subheader("Input Sequence")
-    if st.button("Load sample sequence", use_container_width=True):
-        st.session_state.sequence_text = SAMPLE_FASTA
+with input_col:
+    with st.container(border=True):
+        st.markdown('<div class="panel-title">Sequence Input</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="panel-copy">Upload a FASTA/FNA/TXT file or paste a raw DNA sequence. FASTA headers are removed automatically and non-ACGT characters are ignored.</div>',
+            unsafe_allow_html=True,
+        )
 
-    if "sequence_text" not in st.session_state:
-        st.session_state.sequence_text = SAMPLE_FASTA
+        uploaded_file = st.file_uploader(
+            "Choose a FASTA, FNA, or TXT file",
+            type=["fasta", "fa", "fna", "txt"],
+            label_visibility="collapsed",
+        )
 
-    sequence_text = st.text_area(
-        "DNA sequence",
-        key="sequence_text",
-        height=220,
-        help="Paste a DNA sequence or FASTA text. Non-ACGT characters are ignored.",
-    )
+        if uploaded_file is not None:
+            st.session_state.sequence_text = uploaded_file.read().decode("utf-8")
 
-    st.info(f"Window size = {WINDOW_SIZE} bp, step size = {STEP_SIZE} bp")
-    st.caption(f"Sequence length: {len(parse_sequence(sequence_text))} bp")
+        if "sequence_text" not in st.session_state:
+            st.session_state.sequence_text = ""
+
+        sequence_text = st.text_area(
+            "DNA sequence",
+            key="sequence_text",
+            height=240,
+            label_visibility="collapsed",
+            placeholder=">example\nATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG",
+        )
+
+        st.markdown(
+            f'<div class="small-note">Window size: {WINDOW_SIZE} bp &nbsp;•&nbsp; Step size: {STEP_SIZE} bp &nbsp;•&nbsp; Sequence length: {len(parse_sequence(sequence_text))} bp</div>',
+            unsafe_allow_html=True,
+        )
+
+with info_col:
+    with st.container(border=True):
+        st.markdown('<div class="panel-title">What the demo measures</div>', unsafe_allow_html=True)
+        st.markdown(
+            """
+            - **GC / AT balance**
+            - **AT/TA flexibility**
+            - **Tandem repeat density**
+            - **Wallace melting temperature**
+
+            Windows with higher combined scores are treated as more fragile.
+            """
+        )
 
 seq = parse_sequence(sequence_text)
 
-with right:
-    st.subheader("Method")
+if not seq:
     st.markdown(
         """
-        1. Scan the sequence with a 100 bp sliding window.
-        2. Compute GC content, AT content, AT/TA flexibility, repeat density, and Wallace Tm.
-        3. Normalize values and combine them into a weighted fragility score.
-        4. Highlight windows with the highest scores as potentially fragile regions.
-        """
+        <div class="empty-state">
+            <div class="empty-state-title">No sequence loaded yet</div>
+            <div class="empty-state-copy">Upload a file or paste DNA above to generate the fragility plot and summary tables.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-
-if not seq:
-    st.warning("Enter a valid DNA sequence to run the analysis.")
     st.stop()
 
 if len(seq) < WINDOW_SIZE:
@@ -315,11 +422,11 @@ with table_col:
 
 st.subheader("Fragile Window Map")
 st.markdown(
-    "<div style='padding:0.25rem 0 0.5rem 0; line-height: 1.8;'>" + render_color_legend() + "</div>",
+    "<div style='padding:0.25rem 0 0.6rem 0; line-height: 1.8;'>" + render_color_legend() + "</div>",
     unsafe_allow_html=True,
 )
 st.markdown(
-    "<div style='padding:0 0 1rem 0; line-height: 1.8;'>" + render_sequence_map(results) + "</div>",
+    "<div style='padding:0 0 0.5rem 0; overflow-x:auto;'>" + render_sequence_map(results) + "</div>",
     unsafe_allow_html=True,
 )
 
