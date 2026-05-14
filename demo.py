@@ -3,7 +3,6 @@ from dataclasses import dataclass
 
 import pandas as pd
 import plotly.graph_objects as go
-import streamlit as st
 
 
 WINDOW_SIZE = 100
@@ -106,7 +105,7 @@ def analyze_window(seq: str, start: int, window_size: int) -> WindowResult:
     flex = flexibility_score(window)
     repeat = repeat_density(window)
     tm = melting_temperature(window)
-    fragility = (0.30 * (at / 100.0)) + (0.35 * flex) + (0.35 * repeat) + 0.15 * (1 - (tm / 400))
+    fragility = (0.30 * (at / 100.0)) + (0.35 * flex) + (0.35 * repeat)
     return WindowResult(
         start=start + 1,
         end=start + len(window),
@@ -210,137 +209,3 @@ def fragility_figure(df: pd.DataFrame) -> go.Figure:
         yaxis=dict(range=[0, max(1.0, df["Fragility Score"].max() + 0.1)]),
     )
     return fig
-
-
-st.set_page_config(page_title="Fragile Region Demo", layout="wide")
-
-st.markdown(
-    """
-    <style>
-    .block-container { padding-top: 1rem; padding-bottom: 1.5rem; max-width: 1400px; margin: 0 auto; }
-    .stMetric { margin: 0.5rem 0; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.title("Identifying Fragile Regions in the Human Genome")
-st.caption("Sliding-window computational biology demo based on sequence properties from the presentation slides.")
-
-left, right = st.columns([1, 1])
-
-with left:
-    st.subheader("Input Sequence")
-    
-    btn_col1, btn_col2 = st.columns([1, 1], gap="small")
-    with btn_col1:
-        if st.button("📋 Load Sample", use_container_width=True, key="load_btn"):
-            st.session_state.sequence_text = SAMPLE_FASTA
-            st.rerun()
-    
-    with btn_col2:
-        uploaded_file = st.file_uploader("📁 Upload FASTA", type=["fasta", "fna", "txt"], key="file_upload")
-        if uploaded_file is not None:
-            file_content = uploaded_file.read().decode("utf-8")
-            st.session_state.sequence_text = file_content
-            st.rerun()
-
-    if "sequence_text" not in st.session_state:
-        st.session_state.sequence_text = SAMPLE_FASTA
-
-    sequence_text = st.text_area(
-        "Paste or edit sequence below:",
-        key="sequence_text",
-        height=200,
-        help="Paste a DNA sequence or FASTA text. Non-ACGT characters are ignored.",
-    )
-
-    st.info(f"⚙️ Window: {WINDOW_SIZE} bp | Step: {STEP_SIZE} bp | Length: {len(parse_sequence(sequence_text))} bp")
-
-seq = parse_sequence(sequence_text)
-
-with right:
-    st.subheader("Method")
-    st.markdown(
-        """
-        1. Scan the sequence with a 100 bp sliding window.
-        2. Compute GC content, AT content, AT/TA flexibility, repeat density, and Wallace Tm.
-        3. Normalize values and combine them into a weighted fragility score.
-        4. Highlight windows with the highest scores as potentially fragile regions.
-        """
-    )
-
-if not seq:
-    st.warning("Enter a valid DNA sequence to run the analysis.")
-    st.stop()
-
-if len(seq) < WINDOW_SIZE:
-    st.error(f"Sequence must be at least {WINDOW_SIZE} bp long.")
-    st.stop()
-
-results = analyze_sequence(seq)
-
-if results.empty:
-    st.warning("No windows could be analyzed. Sequence may be too short.")
-    st.stop()
-
-top_row = results.loc[results["Fragility Score"].idxmax()]
-
-st.subheader("Window Summary")
-summary_cols = st.columns(5)
-summary_cols[0].metric("Sequence Length", len(seq))
-summary_cols[1].metric("Windows Analysed", len(results))
-summary_cols[2].metric("Highest Fragility", f'{top_row["Fragility Score"]:.4f}')
-summary_cols[3].metric("Top Window", f'{int(top_row["Start"])}-{int(top_row["End"])}')
-summary_cols[4].metric("Classification", fragility_band(float(top_row["Fragility Score"])))
-
-plot_col, table_col = st.columns([1.1, 0.9])
-
-with plot_col:
-    st.plotly_chart(fragility_figure(results), use_container_width=True)
-
-with table_col:
-    st.subheader("Current Window")
-    selected_window = st.selectbox(
-        "Choose a window to inspect",
-        results.index.tolist(),
-        index=int(results["Fragility Score"].idxmax()),
-        format_func=lambda i: f'{int(results.loc[i, "Start"])}-{int(results.loc[i, "End"])} | score {results.loc[i, "Fragility Score"]:.4f}', #type: ignore
-    )
-    current_row = results.loc[selected_window]
-
-    with st.container(border=True):
-        st.markdown(f'**Position:** {int(current_row["Start"])}-{int(current_row["End"])}')
-        c1, c2, c3 = st.columns(3)
-        c1.metric("GC Content", f'{current_row["GC Content (%)"]:.2f}%')
-        c2.metric("AT Content", f'{current_row["AT Content (%)"]:.2f}%')
-        c3.metric("Flexibility Score", f'{current_row["Flexibility Score"]:.4f}')
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Repeat Density", f'{current_row["Repeat Density"]:.4f}')
-        c2.metric("Tm", int(current_row["Tm"]))
-        c3.metric("Fragility Score", f'{current_row["Fragility Score"]:.4f}')
-
-    st.dataframe(
-        results[["Start", "End", "GC Content (%)", "AT Content (%)", "Flexibility Score", "Repeat Density", "Tm", "Fragility Score"]]
-        .sort_values("Fragility Score", ascending=False)
-        .head(8),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-st.subheader("Fragile Window Map")
-st.markdown(
-    "<div style='padding:0.25rem 0 0.5rem 0; line-height: 1.8;'>" + render_color_legend() + "</div>",
-    unsafe_allow_html=True,
-)
-st.markdown(
-    "<div style='padding:0 0 1rem 0; line-height: 1.8;'>" + render_sequence_map(results) + "</div>",
-    unsafe_allow_html=True,
-)
-
-st.subheader("All Window Scores")
-display_df = results.copy()
-display_df["Fragility Class"] = display_df["Fragility Score"].map(fragility_band)
-st.dataframe(display_df, use_container_width=True, hide_index=True)
-
-st.caption("Red = high fragility, orange = moderate fragility, blue = low fragility.")
