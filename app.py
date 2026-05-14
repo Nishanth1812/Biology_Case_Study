@@ -98,7 +98,7 @@ def analyze_window(seq: str, start: int, window_size: int) -> WindowResult:
     flex = flexibility_score(window)
     repeat = repeat_density(window)
     tm = melting_temperature(window)
-    fragility = (0.30 * (at / 100.0)) + (0.35 * flex) + (0.35 * repeat)
+    fragility = (0.30 * (at / 100.0)) + (0.35 * flex) + (0.35 * repeat) + 0.15 * (1 - (tm / 400))
     return WindowResult(
         start=start + 1,
         end=start + len(window),
@@ -375,6 +375,10 @@ if len(seq) < WINDOW_SIZE:
     st.stop()
 
 results = analyze_sequence(seq)
+
+if results.empty:
+    st.warning("No windows could be analyzed. Sequence may be too short.")
+    st.stop()
 
 top_row = results.loc[results["Fragility Score"].idxmax()]
 
